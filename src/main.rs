@@ -1,12 +1,15 @@
-use anyhow::Error;
+use anyhow::{format_err, Error};
 use chrono::FixedOffset;
 use dioxus::prelude::{
     dioxus_elements, fc_to_builder, format_args_f, rsx, use_future, use_state, Element, LazyNodes,
     NodeFactory, Props, Scope, VNode,
 };
 use im_rc::HashMap;
-use url::Url;
 use log::debug;
+use url::Url;
+use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{Request, RequestInit, Response};
 
 use weather_util_rust::{
     weather_api::WeatherLocation, weather_data::WeatherData, weather_forecast::WeatherForecast,
@@ -91,7 +94,7 @@ fn app(cx: Scope<()>) -> Element {
                                             }
                                             set_search_str.modify(|_| msg.into());
                                             set_search_str.needs_update();
-                                        }    
+                                        }
                                     },
                                     onkeydown: move |evt| {
                                         if let Some(WeatherEntry{weather, forecast}) = cache.get(draft) {
@@ -103,7 +106,7 @@ fn app(cx: Scope<()>) -> Element {
                                                 set_forecast.modify(|_| forecast.clone());
                                                 set_forecast.needs_update();
                                             }
-                                        }    
+                                        }
                                         if evt.key == "Enter" {
                                             set_search_str.modify(|_| draft.clone());
                                             set_search_str.needs_update();
@@ -324,11 +327,19 @@ async fn run_api<T: serde::de::DeserializeOwned>(
 ) -> Result<T, Error> {
     let base_url = format!("{API_ENDPOINT}{command}");
     let url = Url::parse_with_params(&base_url, options)?;
-
-    reqwest::get(url)
-        .await?
-        .error_for_status()?
-        .json()
+    let json = js_fetch(url.as_str())
         .await
-        .map_err(Into::into)
+        .map_err(|e| format_err!("{:?}", e))?;
+    json.into_serde().map_err(Into::into)
+}
+
+async fn js_fetch(url: &str) -> Result<JsValue, JsValue> {
+    let mut opts = RequestInit::new();
+    opts.method("GET");
+
+    let request = Request::new_with_str_and_init(url, &opts)?;
+    let window = web_sys::window().unwrap();
+    let resp = JsFuture::from(window.fetch_with_request(&request)).await?;
+    let resp: Response = resp.dyn_into().unwrap();
+    JsFuture::from(resp.json()?).await
 }
