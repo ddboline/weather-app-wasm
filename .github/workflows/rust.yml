@@ -1,0 +1,43 @@
+name: Rust
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install deps
+      run: |
+        rustup update
+        cargo install trunk
+
+    - name: Clippy
+      run: cargo clippy -- -W clippy::pedantic
+
+    - name: Build
+      run: trunk build --release
+
+    - name: Run tests
+      run: cargo test --verbose
+
+    - name: Upload to codecov.io
+      uses: codecov/codecov-action@v2.1.0
+      with:
+        token: ${{secrets.CODECOV_TOKEN}}
+
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v1
+      with:
+        name: code-coverage-report
+        path: cobertura.xml
