@@ -1,3 +1,6 @@
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::used_underscore_binding)]
+
 use anyhow::{format_err, Error};
 use chrono::FixedOffset;
 use dioxus::prelude::{
@@ -24,10 +27,9 @@ struct WeatherEntry {
     forecast: Option<WeatherForecast>,
 }
 
-fn main() -> Result<(), Error> {
+fn main() {
     debug!("{:?}", WeatherData::default());
     dioxus::web::launch(app);
-    Ok(())
 }
 
 fn app(cx: Scope<()>) -> Element {
@@ -35,12 +37,12 @@ fn app(cx: Scope<()>) -> Element {
 
     let (cache, set_cache) = use_state(&cx, || default_cache).split();
     let (search_str, set_search_str) = use_state(&cx, || String::from(DEFAULT_STR)).split();
-    let (weather, set_weather) = use_state(&cx, || WeatherData::default()).split();
-    let (forecast, set_forecast) = use_state(&cx, || WeatherForecast::default()).split();
+    let (weather, set_weather) = use_state(&cx, WeatherData::default).split();
+    let (forecast, set_forecast) = use_state(&cx, WeatherForecast::default).split();
     let (draft, set_draft) = use_state(&cx, String::new).split();
 
     let weather_future = use_future(&cx, search_str, |s| {
-        let entry_opt = cache.get(&s).map(|e| e.clone());
+        let entry_opt = cache.get(&s).cloned();
         async move {
             if let Some(entry) = entry_opt {
                 entry
@@ -66,7 +68,7 @@ fn app(cx: Scope<()>) -> Element {
                 }
                 new_cache
             });
-            set_cache.needs_update()
+            set_cache.needs_update();
         }
         rsx!(
             link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" },
