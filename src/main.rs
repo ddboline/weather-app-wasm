@@ -1,12 +1,18 @@
-use anyhow::Error;
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::used_underscore_binding)]
+
+use anyhow::{format_err, Error};
 use chrono::FixedOffset;
 use dioxus::prelude::{
     dioxus_elements, fc_to_builder, format_args_f, rsx, use_future, use_state, Element, LazyNodes,
     NodeFactory, Props, Scope, VNode,
 };
 use im_rc::HashMap;
-use url::Url;
 use log::debug;
+use url::Url;
+use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{Request, RequestInit, Response};
 
 use weather_util_rust::{
     weather_api::WeatherLocation, weather_data::WeatherData, weather_forecast::WeatherForecast,
@@ -21,10 +27,9 @@ struct WeatherEntry {
     forecast: Option<WeatherForecast>,
 }
 
-fn main() -> Result<(), Error> {
+fn main() {
     debug!("{:?}", WeatherData::default());
     dioxus::web::launch(app);
-    Ok(())
 }
 
 fn app(cx: Scope<()>) -> Element {
@@ -32,12 +37,12 @@ fn app(cx: Scope<()>) -> Element {
 
     let (cache, set_cache) = use_state(&cx, || default_cache).split();
     let (search_str, set_search_str) = use_state(&cx, || String::from(DEFAULT_STR)).split();
-    let (weather, set_weather) = use_state(&cx, || WeatherData::default()).split();
-    let (forecast, set_forecast) = use_state(&cx, || WeatherForecast::default()).split();
+    let (weather, set_weather) = use_state(&cx, WeatherData::default).split();
+    let (forecast, set_forecast) = use_state(&cx, WeatherForecast::default).split();
     let (draft, set_draft) = use_state(&cx, String::new).split();
 
     let weather_future = use_future(&cx, search_str, |s| {
-        let entry_opt = cache.get(&s).map(|e| e.clone());
+        let entry_opt = cache.get(&s).cloned();
         async move {
             if let Some(entry) = entry_opt {
                 entry
@@ -63,7 +68,7 @@ fn app(cx: Scope<()>) -> Element {
                 }
                 new_cache
             });
-            set_cache.needs_update()
+            set_cache.needs_update();
         }
         rsx!(
             link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" },
@@ -91,7 +96,7 @@ fn app(cx: Scope<()>) -> Element {
                                             }
                                             set_search_str.modify(|_| msg.into());
                                             set_search_str.needs_update();
-                                        }    
+                                        }
                                     },
                                     onkeydown: move |evt| {
                                         if let Some(WeatherEntry{weather, forecast}) = cache.get(draft) {
@@ -103,7 +108,7 @@ fn app(cx: Scope<()>) -> Element {
                                                 set_forecast.modify(|_| forecast.clone());
                                                 set_forecast.needs_update();
                                             }
-                                        }    
+                                        }
                                         if evt.key == "Enter" {
                                             set_search_str.modify(|_| draft.clone());
                                             set_search_str.needs_update();
@@ -324,11 +329,19 @@ async fn run_api<T: serde::de::DeserializeOwned>(
 ) -> Result<T, Error> {
     let base_url = format!("{API_ENDPOINT}{command}");
     let url = Url::parse_with_params(&base_url, options)?;
-
-    reqwest::get(url)
-        .await?
-        .error_for_status()?
-        .json()
+    let json = js_fetch(url.as_str())
         .await
-        .map_err(Into::into)
+        .map_err(|e| format_err!("{:?}", e))?;
+    json.into_serde().map_err(Into::into)
+}
+
+async fn js_fetch(url: &str) -> Result<JsValue, JsValue> {
+    let mut opts = RequestInit::new();
+    opts.method("GET");
+
+    let request = Request::new_with_str_and_init(url, &opts)?;
+    let window = web_sys::window().unwrap();
+    let resp = JsFuture::from(window.fetch_with_request(&request)).await?;
+    let resp: Response = resp.dyn_into().unwrap();
+    JsFuture::from(resp.json()?).await
 }
