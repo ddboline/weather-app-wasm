@@ -3,23 +3,34 @@
 
 use anyhow::{format_err, Error};
 use chrono::FixedOffset;
-use dioxus::prelude::{
-    dioxus_elements, fc_to_builder, format_args_f, rsx, use_future, use_state, Element, LazyNodes,
-    NodeFactory, Props, Scope, VNode,
+use dioxus::{
+    core::exports::futures_channel::oneshot::{channel, Sender},
+    prelude::{
+        dioxus_elements, fc_to_builder, format_args_f, rsx, use_future, use_state, Element,
+        LazyNodes, NodeFactory, Props, Scope, VNode,
+    },
 };
 use im_rc::HashMap;
 use log::debug;
+use serde::Deserialize;
 use url::Url;
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, Response};
 
 use weather_util_rust::{
-    weather_api::WeatherLocation, weather_data::WeatherData, weather_forecast::WeatherForecast,
+    latitude::Latitude, longitude::Longitude, weather_api::WeatherLocation,
+    weather_data::WeatherData, weather_forecast::WeatherForecast,
 };
 
 static DEFAULT_STR: &str = "11106";
 static API_ENDPOINT: &str = "https://cloud.ddboline.net/weather/";
+
+#[derive(Copy, Clone, Default, Deserialize, Debug)]
+struct Location {
+    latitude: Latitude,
+    longitude: Longitude,
+}
 
 #[derive(Clone, Debug)]
 struct WeatherEntry {
@@ -28,35 +39,54 @@ struct WeatherEntry {
 }
 
 fn main() {
+    wasm_logger::init(wasm_logger::Config::default());
     debug!("{:?}", WeatherData::default());
     dioxus::web::launch(app);
 }
 
 fn app(cx: Scope<()>) -> Element {
-    let default_cache: HashMap<String, WeatherEntry> = HashMap::new();
+    let (send, recv) = channel();
+
+    let default_cache: HashMap<WeatherLocation, WeatherEntry> = HashMap::new();
+    let mut default_location_cache: HashMap<String, WeatherLocation> = HashMap::new();
+    default_location_cache.insert(DEFAULT_STR.into(), get_parameters(DEFAULT_STR));
 
     let (cache, set_cache) = use_state(&cx, || default_cache).split();
-    let (search_str, set_search_str) = use_state(&cx, || String::from(DEFAULT_STR)).split();
+    let (location_cache, set_location_cache) = use_state(&cx, || default_location_cache).split();
+    let (location, set_location) = use_state(&cx, || get_parameters(DEFAULT_STR)).split();
     let (weather, set_weather) = use_state(&cx, WeatherData::default).split();
     let (forecast, set_forecast) = use_state(&cx, WeatherForecast::default).split();
     let (draft, set_draft) = use_state(&cx, String::new).split();
 
-    let weather_future = use_future(&cx, search_str, |s| {
-        let entry_opt = cache.get(&s).cloned();
+    let location_future = use_future(&cx, (), |_| async move {
+        if update_location(send).await.is_ok() {
+            if let Ok(location) = recv.await {
+                return Some(location);
+            }
+        }
+        None
+    });
+
+    let weather_future = use_future(&cx, location, |l| {
+        let entry_opt = cache.get(&l).cloned();
         async move {
             if let Some(entry) = entry_opt {
                 entry
             } else {
-                get_weather_data_forecast(&s).await
+                get_weather_data_forecast(&l).await
             }
         }
     });
 
     cx.render({
+        if let Some(Some(location)) = location_future.value() {
+            set_location.modify(|_| get_parameters(&format!("{},{}", location.latitude, location.longitude)));
+            set_location.needs_update();
+        }
         if let Some(entry) = weather_future.value() {
             set_cache.modify(|c| {
-                let new_cache = c.update(search_str.clone(), entry.clone());
-                if let Some(WeatherEntry{weather, forecast}) = new_cache.get(search_str) {
+                let new_cache = c.update(location.clone(), entry.clone());
+                if let Some(WeatherEntry{weather, forecast}) = new_cache.get(&location) {
                     if let Some(weather) = weather {
                         set_weather.modify(|_| weather.clone());
                         set_weather.needs_update();
@@ -83,9 +113,16 @@ fn app(cx: Scope<()>) -> Element {
                                     value: "{draft}",
                                     oninput: move |evt| {
                                         let msg = evt.value.as_str();
-                                        set_draft.modify(|_| evt.value.as_str().into());
+                                        set_draft.modify(|_| msg.into());
                                         set_draft.needs_update();
-                                        if let Some(WeatherEntry{weather, forecast}) = cache.get(msg) {
+                                        let new_location = location_cache.get(msg).map_or_else(
+                                            || {
+                                                let l = get_parameters(msg);
+                                                set_location_cache.modify(|lc| lc.update(msg.into(), l.clone()));
+                                                l
+                                            }, |l| l.clone()
+                                        );
+                                        if let Some(WeatherEntry{weather, forecast}) = cache.get(&new_location) {
                                             if let Some(weather) = weather {
                                                 set_weather.modify(|_| weather.clone());
                                                 set_weather.needs_update();
@@ -94,12 +131,19 @@ fn app(cx: Scope<()>) -> Element {
                                                 set_forecast.modify(|_| forecast.clone());
                                                 set_forecast.needs_update();
                                             }
-                                            set_search_str.modify(|_| msg.into());
-                                            set_search_str.needs_update();
+                                            set_location.modify(|_| new_location);
+                                            set_location.needs_update();
                                         }
                                     },
                                     onkeydown: move |evt| {
-                                        if let Some(WeatherEntry{weather, forecast}) = cache.get(draft) {
+                                        let new_location = location_cache.get(draft).map_or_else(
+                                            || {
+                                                let l = get_parameters(draft);
+                                                set_location_cache.modify(|lc| lc.update(draft.into(), l.clone()));
+                                                l
+                                            }, |l| l.clone()
+                                        );
+                                        if let Some(WeatherEntry{weather, forecast}) = cache.get(&new_location) {
                                             if let Some(weather) = weather {
                                                 set_weather.modify(|_| weather.clone());
                                                 set_weather.needs_update();
@@ -110,8 +154,8 @@ fn app(cx: Scope<()>) -> Element {
                                             }
                                         }
                                         if evt.key == "Enter" {
-                                            set_search_str.modify(|_| draft.clone());
-                                            set_search_str.needs_update();
+                                            set_location.modify(|_| new_location);
+                                            set_location.needs_update();
                                         }
                                     },
                                 }
@@ -306,10 +350,10 @@ fn get_parameters(search_str: &str) -> WeatherLocation {
     opts
 }
 
-async fn get_weather_data_forecast(search_str: &str) -> WeatherEntry {
-    let loc = get_parameters(search_str);
-    let weather = get_weather_data(&loc).await.ok();
-    let forecast = get_weather_forecast(&loc).await.ok();
+async fn get_weather_data_forecast(location: &WeatherLocation) -> WeatherEntry {
+    debug!("{location:?}");
+    let weather = get_weather_data(location).await.ok();
+    let forecast = get_weather_forecast(location).await.ok();
     WeatherEntry { weather, forecast }
 }
 
@@ -344,4 +388,25 @@ async fn js_fetch(url: &str) -> Result<JsValue, JsValue> {
     let resp = JsFuture::from(window.fetch_with_request(&request)).await?;
     let resp: Response = resp.dyn_into().unwrap();
     JsFuture::from(resp.json()?).await
+}
+
+async fn update_location(send: Sender<Location>) -> Result<(), JsValue> {
+    let window = web_sys::window().unwrap();
+    let navigator = window.navigator();
+    let geolocation = navigator.geolocation()?;
+    debug!("geolocation {:?}", geolocation);
+    let closure = Closure::once(move |js: JsValue| {
+        debug!("js {:?}", js);
+        if let Ok(location) = js.into_serde::<Location>() {
+            debug!("location {:?}", location);
+            send.send(location).unwrap();
+        }
+    });
+    if let Some(closure) = closure.as_ref().dyn_ref() {
+        geolocation.get_current_position(closure)?;
+        debug!("success");
+    } else {
+        debug!("failure");
+    }
+    Ok(())
 }
