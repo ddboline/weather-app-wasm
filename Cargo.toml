@@ -1,20 +1,20 @@
 [package]
 name = "weatherapp"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 dioxus = { version = "0.2", features = ["web"] }
-weather_util_rust = {version="0.11", default-features=false}
+weather_util_rust = {version="0.12", default-features=false}
 getrandom = {version="0.2", features=["js"]}
 anyhow = "1.0"
 stack-string = "0.7"
 lazy_static = "1.4"
 arc-swap = "1.5"
 im-rc = "15.0"
-chrono = "0.4"
+time = {version="0.3", features=["serde-human-readable", "macros", "formatting"]}
 log = "0.4"
 wasm-logger = "0.2.0"
 serde = "1.0"

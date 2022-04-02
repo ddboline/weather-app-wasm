@@ -2,7 +2,6 @@
 #![allow(clippy::used_underscore_binding)]
 
 use anyhow::{format_err, Error};
-use chrono::FixedOffset;
 use dioxus::{
     core::exports::futures_channel::oneshot::{channel, Sender},
     prelude::{
@@ -13,6 +12,7 @@ use dioxus::{
 use im_rc::HashMap;
 use log::debug;
 use serde::Deserialize;
+use time::UtcOffset;
 use url::Url;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
@@ -20,7 +20,7 @@ use web_sys::{Request, RequestInit, Response};
 
 use weather_util_rust::{
     latitude::Latitude, longitude::Longitude, weather_api::WeatherLocation,
-    weather_data::WeatherData, weather_forecast::WeatherForecast,
+    weather_data::WeatherData, weather_forecast::WeatherForecast, StringType,
 };
 
 static DEFAULT_STR: &str = "11106";
@@ -57,9 +57,15 @@ fn app(cx: Scope<()>) -> Element {
     let (weather, set_weather) = use_state(&cx, WeatherData::default).split();
     let (forecast, set_forecast) = use_state(&cx, WeatherForecast::default).split();
     let (draft, set_draft) = use_state(&cx, String::new).split();
+    let (search_history, set_search_history) = use_state(&cx, || {
+        let mut v: Vec<StringType> = Vec::with_capacity(3);
+        v.push(DEFAULT_STR.into());
+        v
+    })
+    .split();
 
     let location_future = use_future(&cx, (), |_| async move {
-        if update_location(send).await.is_ok() {
+        if update_location(send).is_ok() {
             if let Ok(location) = recv.await {
                 return Some(location);
             }
@@ -86,12 +92,14 @@ fn app(cx: Scope<()>) -> Element {
         if let Some(entry) = weather_future.value() {
             set_cache.modify(|c| {
                 let new_cache = c.update(location.clone(), entry.clone());
-                if let Some(WeatherEntry{weather, forecast}) = new_cache.get(&location) {
+                if let Some(WeatherEntry{weather, forecast}) = new_cache.get(location) {
                     if let Some(weather) = weather {
+                        debug!("weather_future {location:?}");
                         set_weather.modify(|_| weather.clone());
                         set_weather.needs_update();
                     }
                     if let Some(forecast) = forecast {
+                        debug!("forecast_future {location:?}");
                         set_forecast.modify(|_| forecast.clone());
                         set_forecast.needs_update();
                     }
@@ -120,14 +128,16 @@ fn app(cx: Scope<()>) -> Element {
                                                 let l = get_parameters(msg);
                                                 set_location_cache.modify(|lc| lc.update(msg.into(), l.clone()));
                                                 l
-                                            }, |l| l.clone()
+                                            }, Clone::clone
                                         );
                                         if let Some(WeatherEntry{weather, forecast}) = cache.get(&new_location) {
                                             if let Some(weather) = weather {
+                                                debug!("weather_oninput {location:?}");
                                                 set_weather.modify(|_| weather.clone());
                                                 set_weather.needs_update();
                                             }
                                             if let Some(forecast) = forecast {
+                                                debug!("forecast_oninput {location:?}");
                                                 set_forecast.modify(|_| forecast.clone());
                                                 set_forecast.needs_update();
                                             }
@@ -141,19 +151,29 @@ fn app(cx: Scope<()>) -> Element {
                                                 let l = get_parameters(draft);
                                                 set_location_cache.modify(|lc| lc.update(draft.into(), l.clone()));
                                                 l
-                                            }, |l| l.clone()
+                                            }, Clone::clone
                                         );
                                         if let Some(WeatherEntry{weather, forecast}) = cache.get(&new_location) {
                                             if let Some(weather) = weather {
+                                                debug!("weather_onkeydown {location:?}");
                                                 set_weather.modify(|_| weather.clone());
                                                 set_weather.needs_update();
                                             }
                                             if let Some(forecast) = forecast {
+                                                debug!("forecast_onkeydown {location:?}");
                                                 set_forecast.modify(|_| forecast.clone());
                                                 set_forecast.needs_update();
                                             }
                                         }
                                         if evt.key == "Enter" {
+                                            set_draft.modify(|_| "".into());
+                                            set_draft.needs_update();
+                                            set_search_history.modify(|sh| {
+                                                let mut v = Vec::with_capacity(3);
+                                                v.push(draft.clone());
+                                                v.extend(sh.iter().take(2).cloned());
+                                                v
+                                            });
                                             set_location.modify(|_| new_location);
                                             set_location.needs_update();
                                         }
@@ -172,6 +192,51 @@ fn app(cx: Scope<()>) -> Element {
                                     }
                                 }
                             }
+                        }
+                        ul { class: "bg-white border border-gray-100 w-full mt-2",
+                            {search_history.iter().enumerate().map(|(i, s)| rsx! {
+                                li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
+                                    key: "{i}",
+                                    button {
+                                        onclick: move |_| {
+                                            set_draft.modify(|_| "".into());
+                                            set_draft.needs_update();
+                                            debug!("search_str {s}");
+                                            let new_location = location_cache.get(s).map_or_else(
+                                                || {
+                                                    let l = get_parameters(s);
+                                                    set_location_cache.modify(|lc| lc.update(s.clone(), l.clone()));
+                                                    set_location_cache.needs_update();
+                                                    set_search_history.modify(|sh| {
+                                                        let mut v = Vec::with_capacity(3);
+                                                        v.push(s.clone());
+                                                        v.extend(sh.iter().take(2).cloned());
+                                                        v
+                                                    });
+                                                    set_search_history.needs_update();
+                                                    l
+                                                }, Clone::clone
+                                            );
+                                            debug!("{new_location:?}");
+                                            if let Some(WeatherEntry{weather, forecast}) = cache.get(&new_location) {
+                                                if let Some(weather) = weather {
+                                                    debug!("weather {new_location:?}");
+                                                    set_weather.modify(|_| weather.clone());
+                                                    set_weather.needs_update();
+                                                }
+                                                if let Some(forecast) = forecast {
+                                                    debug!("forecast {new_location:?}");
+                                                    set_forecast.modify(|_| forecast.clone());
+                                                    set_forecast.needs_update();
+                                                }
+                                            }
+                                            set_location.modify(|_| new_location);
+                                            set_location.needs_update();
+                                        },
+                                        "{s}"
+                                    }
+                                }
+                            })}
                         }
                     }
                     div { class: "flex flex-wrap w-full px-2",
@@ -246,8 +311,8 @@ fn country_info<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
         icon.push_str(&weather.icon);
     }
     let temp = weather.main.temp.fahrenheit();
-    let fo: FixedOffset = weather.timezone.into();
-    let date = weather.dt.with_timezone(&fo);
+    let fo: UtcOffset = weather.timezone.into();
+    let date = weather.dt.to_offset(fo);
 
     cx.render(rsx!(
         div { class: "flex mb-4 justify-between items-center",
@@ -286,7 +351,7 @@ fn week_weather<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
             div { class: "text-center justify-between items-center flex",
                 style: "flex-flow: initial;",
                 high_low.iter().map(|(d, (h, l, r, s, i))| {
-                    let weekday = format!("{}", d.format("%a"));
+                    let weekday = d.weekday();
                     let low = l.fahrenheit();
                     let high = h.fahrenheit();
                     let mut rain = String::new();
@@ -390,7 +455,7 @@ async fn js_fetch(url: &str) -> Result<JsValue, JsValue> {
     JsFuture::from(resp.json()?).await
 }
 
-async fn update_location(send: Sender<Location>) -> Result<(), JsValue> {
+fn update_location(send: Sender<Location>) -> Result<(), JsValue> {
     let window = web_sys::window().unwrap();
     let navigator = window.navigator();
     let geolocation = navigator.geolocation()?;
