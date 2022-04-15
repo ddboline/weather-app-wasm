@@ -12,6 +12,7 @@ use dioxus::{
 use im_rc::HashMap;
 use log::debug;
 use serde::Deserialize;
+use stack_string::StackString;
 use time::UtcOffset;
 use url::Url;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
@@ -20,7 +21,7 @@ use web_sys::{Request, RequestInit, Response};
 
 use weather_util_rust::{
     latitude::Latitude, longitude::Longitude, weather_api::WeatherLocation,
-    weather_data::WeatherData, weather_forecast::WeatherForecast, StringType,
+    weather_data::WeatherData, weather_forecast::WeatherForecast,
 };
 
 static DEFAULT_STR: &str = "11106";
@@ -57,12 +58,8 @@ fn app(cx: Scope<()>) -> Element {
     let (weather, set_weather) = use_state(&cx, WeatherData::default).split();
     let (forecast, set_forecast) = use_state(&cx, WeatherForecast::default).split();
     let (draft, set_draft) = use_state(&cx, String::new).split();
-    let (search_history, set_search_history) = use_state(&cx, || {
-        let mut v: Vec<StringType> = Vec::with_capacity(3);
-        v.push(DEFAULT_STR.into());
-        v
-    })
-    .split();
+    let (search_history, set_search_history) =
+        use_state(&cx, || vec![StackString::from(DEFAULT_STR)]).split();
 
     let location_future = use_future(&cx, (), |_| async move {
         if update_location(send).is_ok() {
@@ -169,9 +166,8 @@ fn app(cx: Scope<()>) -> Element {
                                             set_draft.modify(|_| "".into());
                                             set_draft.needs_update();
                                             set_search_history.modify(|sh| {
-                                                let mut v = Vec::with_capacity(3);
-                                                v.push(draft.clone());
-                                                v.extend(sh.iter().take(2).cloned());
+                                                let mut v: Vec<StackString> = sh.iter().filter(|s| s.as_str() != draft.as_str()).cloned().collect();
+                                                v.push(draft.into());
                                                 v
                                             });
                                             set_location.modify(|_| new_location);
@@ -193,48 +189,43 @@ fn app(cx: Scope<()>) -> Element {
                                 }
                             }
                         }
-                        ul { class: "bg-white border border-gray-100 w-full mt-2",
-                            {search_history.iter().enumerate().map(|(i, s)| rsx! {
-                                li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
-                                    key: "{i}",
-                                    button {
-                                        onclick: move |_| {
-                                            set_draft.modify(|_| "".into());
-                                            set_draft.needs_update();
-                                            debug!("search_str {s}");
-                                            let new_location = location_cache.get(s).map_or_else(
-                                                || {
-                                                    let l = get_parameters(s);
-                                                    set_location_cache.modify(|lc| lc.update(s.clone(), l.clone()));
-                                                    set_location_cache.needs_update();
-                                                    set_search_history.modify(|sh| {
-                                                        let mut v = Vec::with_capacity(3);
-                                                        v.push(s.clone());
-                                                        v.extend(sh.iter().take(2).cloned());
-                                                        v
-                                                    });
-                                                    set_search_history.needs_update();
-                                                    l
-                                                }, Clone::clone
-                                            );
-                                            debug!("{new_location:?}");
-                                            if let Some(WeatherEntry{weather, forecast}) = cache.get(&new_location) {
-                                                if let Some(weather) = weather {
-                                                    debug!("weather {new_location:?}");
-                                                    set_weather.modify(|_| weather.clone());
-                                                    set_weather.needs_update();
-                                                }
-                                                if let Some(forecast) = forecast {
-                                                    debug!("forecast {new_location:?}");
-                                                    set_forecast.modify(|_| forecast.clone());
-                                                    set_forecast.needs_update();
-                                                }
-                                            }
-                                            set_location.modify(|_| new_location);
-                                            set_location.needs_update();
-                                        },
-                                        "{s}"
+                        select { class: "bg-white border border-gray-100 w-full mt-2",
+                            id: "history-selector",
+                            onchange: move |x| {
+                                let s = x.data.value.as_str();
+                                let new_location = location_cache.get(s).map_or_else(|| {
+                                    let l = get_parameters(s);
+                                    set_location_cache.modify(|lc| lc.update(s.into(), l.clone()));
+                                    set_location_cache.needs_update();
+                                    set_search_history.modify(|sh| {
+                                        let mut v: Vec<StackString> = sh.iter().filter(|x| x.as_str() != s).cloned().collect();
+                                        v.push(s.into());
+                                        v
+                                    });
+                                    set_search_history.needs_update();
+                                    l
+                                }, Clone::clone);
+                                debug!("{new_location:?}");
+                                if let Some(WeatherEntry{weather, forecast}) = cache.get(&new_location) {
+                                    if let Some(weather) = weather {
+                                        debug!("weather {new_location:?}");
+                                        set_weather.modify(|_| weather.clone());
+                                        set_weather.needs_update();
                                     }
+                                    if let Some(forecast) = forecast {
+                                        debug!("forecast {new_location:?}");
+                                        set_forecast.modify(|_| forecast.clone());
+                                        set_forecast.needs_update();
+                                    }
+                                }
+                                set_location.modify(|_| new_location);
+                                set_location.needs_update();
+                            },
+                            {search_history.iter().rev().map(|s| rsx! {
+                                option { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
+                                    key: "search-history-key-{s}",
+                                    value: "{s}",
+                                    "{s}"
                                 }
                             })}
                         }
