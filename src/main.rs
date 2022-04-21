@@ -18,6 +18,7 @@ use url::Url;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, Response};
+use http::method::Method;
 
 use weather_util_rust::{
     latitude::Latitude, longitude::Longitude, weather_api::WeatherLocation,
@@ -429,17 +430,17 @@ async fn run_api<T: serde::de::DeserializeOwned>(
 ) -> Result<T, Error> {
     let base_url = format!("{API_ENDPOINT}{command}");
     let url = Url::parse_with_params(&base_url, options)?;
-    let json = js_fetch(url.as_str())
+    let json = js_fetch(&url, Method::GET)
         .await
         .map_err(|e| format_err!("{:?}", e))?;
     json.into_serde().map_err(Into::into)
 }
 
-async fn js_fetch(url: &str) -> Result<JsValue, JsValue> {
+async fn js_fetch(url: &Url, method: Method) -> Result<JsValue, JsValue> {
     let mut opts = RequestInit::new();
-    opts.method("GET");
+    opts.method(method.as_str());
 
-    let request = Request::new_with_str_and_init(url, &opts)?;
+    let request = Request::new_with_str_and_init(url.as_str(), &opts)?;
     let window = web_sys::window().unwrap();
     let resp = JsFuture::from(window.fetch_with_request(&request)).await?;
     let resp: Response = resp.dyn_into().unwrap();
