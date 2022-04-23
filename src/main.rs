@@ -180,7 +180,7 @@ fn app(cx: Scope<()>) -> Element {
                                     "viewBox": "0 0 24 24",
                                     fill: "none",
                                     stroke: "currentColor",
-                                    xmlns: "http://www.w3.org/2000/svg",
+                                    xmlns: "https://www.w3.org/2000/svg",
                                     path {
                                         d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
                                         "stroke-linejoin": "round",
@@ -314,7 +314,7 @@ fn country_info<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
                 }
                 small {
                     img { class: "block w-8 h-8",
-                        src: "http://openweathermap.org/img/wn/{icon}@2x.png",
+                        src: "https://openweathermap.org/img/wn/{icon}@2x.png",
                     }
                 }
             }
@@ -366,7 +366,7 @@ fn week_weather<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
                                 "{weekday}"
                             }
                             img { class: "block w-8 h-8",
-                                src: "http://openweathermap.org/img/wn/{icon}@2x.png",
+                                src: "https://openweathermap.org/img/wn/{icon}@2x.png",
                             }
                             span { class: "block my-1",
                                 "{low:0.1}F°"
