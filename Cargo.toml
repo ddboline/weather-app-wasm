@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 dioxus = { version = "0.2", features = ["web"] }
-weather_util_rust = {version="0.13", default-features=false}
+weather_util_rust = {version="0.14", default-features=false}
 getrandom = {version="0.2", features=["js"]}
 anyhow = "1.0"
 stack-string = "0.7"
