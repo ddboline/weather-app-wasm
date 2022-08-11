@@ -12,7 +12,6 @@ getrandom = {version="0.2", features=["js"]}
 anyhow = "1.0"
 stack-string = "0.7"
 lazy_static = "1.4"
-arc-swap = "1.5"
 im-rc = "15.0"
 time = {version="0.3", features=["serde-human-readable", "macros", "formatting"]}
 log = "0.4"
