@@ -41,7 +41,7 @@ jobs:
       run: trunk build --release
 
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test
 
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v2.1.0
