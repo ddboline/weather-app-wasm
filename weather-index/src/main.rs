@@ -1,12 +1,11 @@
 #![allow(clippy::too_many_lines)]
 
-
 use dioxus::prelude::{
-    dioxus_elements, format_args_f, rsx, Element, LazyNodes, NodeFactory, Scope, VNode,
-    use_state, fc_to_builder,
+    dioxus_elements, fc_to_builder, format_args_f, rsx, use_state, Element, LazyNodes, NodeFactory,
+    Scope, VNode,
 };
-use golde::{call, trigger, init_app, App, Trigger};
-use fermi::{Atom, use_set, use_read};
+use fermi::{use_read, use_set, Atom};
+use golde::{call, init_app, trigger, App, Trigger};
 
 #[cfg(debug_assertions)]
 static BASE_URL: &str = "https://www.ddboline.net";
@@ -17,20 +16,20 @@ static BASE_URL: &str = "";
 static DEFAULT_LOCATION: &str = "zip=10001";
 static LOCATION: Atom<String> = |_| String::from(DEFAULT_LOCATION);
 
-
 fn main() {
     // init debug tool for WebAssembly
     wasm_logger::init(wasm_logger::Config::default());
     console_error_panic_hook::set_once();
 
-    dioxus::web::launch(app); 
+    dioxus::web::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
     let (url_path, set_url_path) = use_state(&cx, || "weather/plot.html").split();
     let (draft, set_draft) = use_state(&cx, String::new).split();
     let (current_loc, set_current_loc) = use_state(&cx, String::new).split();
-    let (search_history, set_search_history) = use_state(&cx, || vec![String::from("zip=10001")]).split();
+    let (search_history, set_search_history) =
+        use_state(&cx, || vec![String::from("zip=10001")]).split();
 
     init_app(&cx, |_| {});
 
@@ -128,7 +127,7 @@ fn app(cx: Scope) -> Element {
                                     v.push(loc.clone());
                                     v
                                 });
-                                set_search_history.needs_update();        
+                                set_search_history.needs_update();
                                 set_location(loc.clone());
                                 set_current_loc.set(loc);
                                 set_current_loc.needs_update();
@@ -147,7 +146,7 @@ fn app(cx: Scope) -> Element {
                             v.push(s.into());
                             v
                         });
-                        set_search_history.needs_update();        
+                        set_search_history.needs_update();
                         set_location(s.into());
                     },
                     search_history.iter().rev().enumerate().map(|(idx, s)| {
