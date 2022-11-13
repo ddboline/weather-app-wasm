@@ -222,13 +222,19 @@ fn app(cx: Scope<()>) -> Element {
                                 set_location.modify(|_| new_location);
                                 set_location.needs_update();
                             },
-                            {search_history.iter().rev().map(|s| rsx! {
-                                option { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
-                                    key: "search-history-key-{s}",
-                                    value: "{s}",
-                                    "{s}"
-                                }
-                            })}
+                            {
+                                search_history.iter().rev().map(|s| {
+                                    let selected = location_cache.contains_key(s.as_str());
+                                    rsx! {
+                                        option { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
+                                            key: "search-history-key-{s}",
+                                            value: "{s}",
+                                            selected: "{selected}",
+                                            "{s}"
+                                        }
+                                    }
+                                })
+                            }
                         }
                     }
                     div { class: "flex flex-wrap w-full px-2",
