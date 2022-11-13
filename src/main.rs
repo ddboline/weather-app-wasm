@@ -9,6 +9,7 @@ use dioxus::{
         LazyNodes, NodeFactory, Props, Scope, VNode,
     },
 };
+use http::method::Method;
 use im_rc::HashMap;
 use log::debug;
 use serde::Deserialize;
@@ -18,7 +19,6 @@ use url::Url;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, Response};
-use http::method::Method;
 
 use weather_util_rust::{
     latitude::Latitude, longitude::Longitude, weather_api::WeatherLocation,
@@ -164,7 +164,7 @@ fn app(cx: Scope<()>) -> Element {
                                             }
                                         }
                                         if evt.key == "Enter" {
-                                            set_draft.modify(|_| "".into());
+                                            set_draft.modify(|_| String::new());
                                             set_draft.needs_update();
                                             set_search_history.modify(|sh| {
                                                 let mut v: Vec<StackString> = sh.iter().filter(|s| s.as_str() != draft.as_str()).cloned().collect();
@@ -439,7 +439,7 @@ async fn run_api<T: serde::de::DeserializeOwned>(
     let json = js_fetch(&url, Method::GET)
         .await
         .map_err(|e| format_err!("{:?}", e))?;
-    json.into_serde().map_err(Into::into)
+    serde_wasm_bindgen::from_value(json).map_err(|e| format_err!("{:?}", e))
 }
 
 async fn js_fetch(url: &Url, method: Method) -> Result<JsValue, JsValue> {
@@ -460,7 +460,7 @@ fn update_location(send: Sender<Location>) -> Result<(), JsValue> {
     debug!("geolocation {:?}", geolocation);
     let closure = Closure::once(move |js: JsValue| {
         debug!("js {:?}", js);
-        if let Ok(location) = js.into_serde::<Location>() {
+        if let Ok(location) = serde_wasm_bindgen::from_value::<Location>(js) {
             debug!("location {:?}", location);
             send.send(location).unwrap();
         }

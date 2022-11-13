@@ -1,3 +1,6 @@
+#![allow(clippy::too_many_lines)]
+
+
 use dioxus::prelude::{
     dioxus_elements, format_args_f, rsx, Element, LazyNodes, NodeFactory, Scope, VNode,
     use_state, fc_to_builder,
@@ -47,7 +50,7 @@ fn app(cx: Scope) -> Element {
             format!("q={s}")
         };
         set_search_history.modify(|sh| {
-            let mut v: Vec<String> = sh.iter().filter(|x| x.as_str() != &loc).cloned().collect();
+            let mut v: Vec<String> = sh.iter().filter(|x| x.as_str() != loc).cloned().collect();
             v.push(loc.clone());
             v
         });
@@ -59,7 +62,7 @@ fn app(cx: Scope) -> Element {
         App {
             trigger: trigger!(
                 current_location => move |_, v| {
-                    set_location_trigger(v.as_string().unwrap_or_else(|| DEFAULT_LOCATION.into()))
+                    set_location_trigger(v.as_string().unwrap_or_else(|| DEFAULT_LOCATION.into()));
                 }
             ),
         }
@@ -121,7 +124,7 @@ fn app(cx: Scope) -> Element {
                                     format!("q={draft}")
                                 };
                                 set_search_history.modify(|sh| {
-                                    let mut v: Vec<String> = sh.iter().filter(|x| x.as_str() != &loc).cloned().collect();
+                                    let mut v: Vec<String> = sh.iter().filter(|x| x.as_str() != loc).cloned().collect();
                                     v.push(loc.clone());
                                     v
                                 });
@@ -129,7 +132,7 @@ fn app(cx: Scope) -> Element {
                                 set_location(loc.clone());
                                 set_current_loc.set(loc);
                                 set_current_loc.needs_update();
-                                set_draft.set("".into());
+                                set_draft.set(String::new());
                                 set_draft.needs_update();
                             }
                         },
