@@ -1,0 +1,18 @@
+[package]
+name = "weather-index"
+version = "0.1.0"
+authors = ["Daniel Boline <ddboline@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { version = "0.2.4", features = ["web"] }
+golde = {git = "https://github.com/ddboline/golde.git", branch="main"}
+fermi = "0.2"
+log = "0.4.6"
+doson = "0.1"
+wasm-logger = "0.2.0"
+console_error_panic_hook = "0.1.7"
+wasm-bindgen = "0.2.82"
+web-sys = {version="0.3"}
