@@ -24,18 +24,26 @@ jobs:
         cargo install trunk
 
     - name: Clippy
-      run: cargo clippy -- -W clippy::pedantic
+      run: |
+        cargo clippy -- -W clippy::pedantic && \
+        cd weather-app-desktop && cargo clippy -- -W clippy::pedantic && cd ../ && \
+        cd weather-index && cargo clippy -- -W clippy::pedantic && cd ../
 
     - name: Outdated
       run: |
         cargo install cargo-outdated && \
-        cargo outdated -d2
+        cargo outdated -d2 && \
+        cd weather-app-desktop && cargo outdated -d2 && cd ../ && \
+        cd weather-index && cargo outdated -d2 && cd ../
 
     - name: Unused Deps
       run: |
         rustup update nightly && \
         cargo +nightly install cargo-udeps && \
-        cargo +nightly udeps
+        cargo +nightly udeps && \
+        cd weather-app-desktop && cargo +nightly udeps && cd ../ && \
+        cd weather-index && cargo +nightly udeps && cd ../
+
 
     - name: Build
       run: trunk build --release
