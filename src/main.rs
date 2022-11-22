@@ -5,8 +5,8 @@ use anyhow::{format_err, Error};
 use dioxus::{
     core::exports::futures_channel::oneshot::{channel, Sender},
     prelude::{
-        dioxus_elements, fc_to_builder, format_args_f, rsx, use_future, use_state, Element,
-        LazyNodes, NodeFactory, Props, Scope, VNode,
+        dioxus_elements, format_args_f, rsx, use_future, use_state, Element,
+        LazyNodes, NodeFactory, Scope, VNode,
     },
 };
 use http::method::Method;
@@ -106,6 +106,10 @@ fn app(cx: Scope<()>) -> Element {
             });
             set_cache.needs_update();
         }
+        let country_info_element = country_info(weather);
+        let country_data_element = country_data(weather);
+        let week_weather_element = week_weather(forecast);
+
         rsx!(
             link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" },
             div { class: "mx-auto p-4 bg-gray-100 h-screen flex justify-center",
@@ -240,10 +244,10 @@ fn app(cx: Scope<()>) -> Element {
                     div { class: "flex flex-wrap w-full px-2",
                         div { class: "bg-gray-900 text-white relative min-w-0 break-words rounded-lg overflow-hidden shadow-sm mb-4 w-full bg-white dark:bg-gray-600",
                             div { class: "px-6 py-6 relative",
-                                country_info( weather: weather, forecast: forecast )
-                                country_data( weather: weather, forecast: forecast )
+                                country_info_element,
+                                country_data_element,
                             }
-                            week_weather( weather: weather, forecast: forecast )
+                            week_weather_element,
                         }
                     }
                 }
@@ -252,21 +256,13 @@ fn app(cx: Scope<()>) -> Element {
     })
 }
 
-#[allow(clippy::used_underscore_binding)]
-#[derive(Props)]
-struct WeatherForecastProp<'a> {
-    weather: &'a WeatherData,
-    forecast: &'a WeatherForecast,
-}
-
-fn country_data<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
-    let weather = cx.props.weather;
+fn country_data<'a>(weather: &'a WeatherData) -> LazyNodes<'a, 'a> {
     let temp = weather.main.temp.fahrenheit();
     let feels = weather.main.feels_like.fahrenheit();
     let min = weather.main.temp_min.fahrenheit();
     let max = weather.main.temp_max.fahrenheit();
 
-    cx.render(rsx!(
+    rsx!(
         div { class: "block sm:flex justify-between items-center flex-wrap",
             div { class: "w-full sm:w-1/2",
                 div { class: "flex mb-2 justify-between items-center",
@@ -293,11 +289,10 @@ fn country_data<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
                 }
             }
         }
-    ))
+    )
 }
 
-fn country_info<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
-    let weather = cx.props.weather;
+fn country_info<'a>(weather: &'a WeatherData) -> LazyNodes<'a, 'a> {
     let name = &weather.name;
     let country = weather.sys.country.as_ref().map_or("", String::as_str);
     let mut main = String::new();
@@ -312,7 +307,7 @@ fn country_info<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
     let fo: UtcOffset = weather.timezone.into();
     let date = weather.dt.to_offset(fo);
 
-    cx.render(rsx!(
+    rsx!(
         div { class: "flex mb-4 justify-between items-center",
             div {
                 h5 { class: "mb-0 font-medium text-xl",
@@ -335,13 +330,12 @@ fn country_info<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
                 }
             }
         }
-    ))
+    )
 }
 
-fn week_weather<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
-    let forecast = cx.props.forecast;
+fn week_weather<'a>(forecast: &'a WeatherForecast) -> LazyNodes<'a, 'a> {
     let high_low = forecast.get_high_low();
-    cx.render(rsx!(
+    rsx!(
         div { class: "divider table mx-2 text-center bg-transparent whitespace-nowrap",
             span { class: "inline-block px-3", small { "Forecast" } }
         }
@@ -391,7 +385,7 @@ fn week_weather<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
                 })
             }
         }
-    ))
+    )
 }
 
 fn get_parameters(search_str: &str) -> WeatherLocation {
