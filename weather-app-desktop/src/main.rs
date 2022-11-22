@@ -3,8 +3,7 @@
 
 use anyhow::{format_err, Error};
 use dioxus::prelude::{
-    dioxus_elements, fc_to_builder, format_args_f, rsx, use_state, Element, LazyNodes, NodeFactory,
-    Props, Scope, VNode,
+    dioxus_elements, format_args_f, rsx, use_state, Element, LazyNodes, NodeFactory, Scope, VNode,
 };
 use lazy_static::lazy_static;
 use log::debug;
@@ -110,153 +109,152 @@ fn app(cx: Scope<AppProps>) -> Element {
     let (search_history, set_search_history) =
         use_state(&cx, || vec![StackString::from(DEFAULT_STR)]).split();
 
-    cx.render(rsx!(
-        link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" },
-        div { class: "mx-auto p-4 bg-gray-100 h-screen flex justify-center",
-            div { class: "flex items-center justify-center flex-col",
-                div {
-                    div { class: "inline-flex flex-col justify-center relative text-gray-500",
-                        div { class: "relative",
-                            input { class: "p-2 pl-8 rounded border border-gray-200 bg-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent",
-                                placeholder: "search...",
-                                "type": "text",
-                                value: "{draft}",
-                                oninput: move |evt| {
-                                    let msg = evt.value.as_str();
-                                    set_draft.modify(|_| evt.value.as_str().into());
-                                    set_draft.needs_update();
-                                    if let Some(WeatherEntry{weather, forecast}) = WEATHER_CACHE.get_entry(msg) {
-                                        if let Some(weather) = weather {
-                                            set_weather.modify(|_| weather);
-                                            set_weather.needs_update();
-                                        }
-                                        if let Some(forecast) = forecast {
-                                            set_forecast.modify(|_| forecast);
-                                            set_forecast.needs_update();
-                                        }
-                                    }
-                                },
-                                onkeydown: move |evt| {
-                                    if let Some(WeatherEntry{weather, forecast}) = WEATHER_CACHE.get_entry(draft) {
-                                        if let Some(weather) = weather {
-                                            set_weather.modify(|_| weather);
-                                            set_weather.needs_update();
-                                        }
-                                        if let Some(forecast) = forecast {
-                                            set_forecast.modify(|_| forecast);
-                                            set_forecast.needs_update();
-                                        }
-                                    }
-                                    if evt.key == "Enter" {
-                                        set_search_str.modify(|_| draft.clone());
-                                        set_search_str.needs_update();
-                                        cx.props.send.send(draft.clone()).unwrap();
-                                        set_draft.modify(|_| "".into());
+    cx.render({
+        let country_info_element = country_info(&weather);
+        let country_data_element = country_data(&weather);
+        let week_weather_element = week_weather(&forecast);
+
+        rsx! {
+            link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" },
+            div { class: "mx-auto p-4 bg-gray-100 h-screen flex justify-center",
+                div { class: "flex items-center justify-center flex-col",
+                    div {
+                        div { class: "inline-flex flex-col justify-center relative text-gray-500",
+                            div { class: "relative",
+                                input { class: "p-2 pl-8 rounded border border-gray-200 bg-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent",
+                                    placeholder: "search...",
+                                    "type": "text",
+                                    value: "{draft}",
+                                    oninput: move |evt| {
+                                        let msg = evt.value.as_str();
+                                        set_draft.modify(|_| evt.value.as_str().into());
                                         set_draft.needs_update();
-                                        loop {
-                                            if let Some(WeatherEntry{weather, forecast}) = WEATHER_CACHE.get_entry(draft) {
-                                                if let Some(weather) = weather {
-                                                    set_weather.modify(|_| weather);
-                                                    set_weather.needs_update();
-                                                } else {
-                                                    break;
-                                                }
-                                                if let Some(forecast) = forecast {
-                                                    set_forecast.modify(|_| forecast);
-                                                    set_forecast.needs_update();
-                                                } else {
-                                                    break;
-                                                }
-                                                set_search_history.modify(|sh| {
-                                                    let mut v: Vec<_> = sh.iter().filter(|s| *s != draft).cloned().collect();
-                                                    v.push(draft.clone());
-                                                    v
-                                                });
-                                                set_search_history.needs_update();
-                                                break;
+                                        if let Some(WeatherEntry{weather, forecast}) = WEATHER_CACHE.get_entry(msg) {
+                                            if let Some(weather) = weather {
+                                                set_weather.modify(|_| weather);
+                                                set_weather.needs_update();
                                             }
-                                            std::thread::sleep(std::time::Duration::from_millis(10));
+                                            if let Some(forecast) = forecast {
+                                                set_forecast.modify(|_| forecast);
+                                                set_forecast.needs_update();
+                                            }
                                         }
+                                    },
+                                    onkeydown: move |evt| {
+                                        if let Some(WeatherEntry{weather, forecast}) = WEATHER_CACHE.get_entry(draft) {
+                                            if let Some(weather) = weather {
+                                                set_weather.modify(|_| weather);
+                                                set_weather.needs_update();
+                                            }
+                                            if let Some(forecast) = forecast {
+                                                set_forecast.modify(|_| forecast);
+                                                set_forecast.needs_update();
+                                            }
+                                        }
+                                        if evt.key == "Enter" {
+                                            set_search_str.modify(|_| draft.clone());
+                                            set_search_str.needs_update();
+                                            cx.props.send.send(draft.clone()).unwrap();
+                                            set_draft.modify(|_| "".into());
+                                            set_draft.needs_update();
+                                            loop {
+                                                if let Some(WeatherEntry{weather, forecast}) = WEATHER_CACHE.get_entry(draft) {
+                                                    if let Some(weather) = weather {
+                                                        set_weather.modify(|_| weather);
+                                                        set_weather.needs_update();
+                                                    } else {
+                                                        break;
+                                                    }
+                                                    if let Some(forecast) = forecast {
+                                                        set_forecast.modify(|_| forecast);
+                                                        set_forecast.needs_update();
+                                                    } else {
+                                                        break;
+                                                    }
+                                                    set_search_history.modify(|sh| {
+                                                        let mut v: Vec<_> = sh.iter().filter(|s| *s != draft).cloned().collect();
+                                                        v.push(draft.clone());
+                                                        v
+                                                    });
+                                                    set_search_history.needs_update();
+                                                    break;
+                                                }
+                                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                            }
+                                        }
+                                    },
+                                }
+                                svg { class: "w-4 h-4 absolute left-2.5 top-3.5",
+                                    "viewBox": "0 0 24 24",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    xmlns: "http://www.w3.org/2000/svg",
+                                    path {
+                                        d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+                                        "stroke-linejoin": "round",
+                                        "stroke-linecap": "round",
+                                        "stroke-width": "2",
                                     }
-                                },
-                            }
-                            svg { class: "w-4 h-4 absolute left-2.5 top-3.5",
-                                "viewBox": "0 0 24 24",
-                                fill: "none",
-                                stroke: "currentColor",
-                                xmlns: "http://www.w3.org/2000/svg",
-                                path {
-                                    d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
-                                    "stroke-linejoin": "round",
-                                    "stroke-linecap": "round",
-                                    "stroke-width": "2",
                                 }
                             }
                         }
-                    }
-                    select { class: "bg-white border border-gray-100 w-full mt-2",
-                        id: "history-selector",
-                        onchange: move |x| {
-                            let s = x.data.value.as_str();
-                            if let Some(WeatherEntry{weather, forecast}) = WEATHER_CACHE.get_entry(s) {
-                                if let Some(weather) = weather {
-                                    set_weather.modify(|_| weather);
-                                    set_weather.needs_update();
+                        select { class: "bg-white border border-gray-100 w-full mt-2",
+                            id: "history-selector",
+                            onchange: move |x| {
+                                let s = x.data.value.as_str();
+                                if let Some(WeatherEntry{weather, forecast}) = WEATHER_CACHE.get_entry(s) {
+                                    if let Some(weather) = weather {
+                                        set_weather.modify(|_| weather);
+                                        set_weather.needs_update();
+                                    }
+                                    if let Some(forecast) = forecast {
+                                        set_forecast.modify(|_| forecast);
+                                        set_forecast.needs_update();
+                                    }
                                 }
-                                if let Some(forecast) = forecast {
-                                    set_forecast.modify(|_| forecast);
-                                    set_forecast.needs_update();
+                                set_search_history.modify(|sh| {
+                                    let mut v: Vec<_> = sh.iter().filter(|x| x.as_str() != s).cloned().collect();
+                                    v.push(s.into());
+                                    v
+                                });
+                                set_search_history.needs_update();
+                            },
+                            {search_history.iter().rev().map(|s| {
+                                let selected = WEATHER_CACHE.contains_key(s);
+                                rsx! {
+                                    option { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
+                                        key: "search-history-key-{s}",
+                                        value: "{s}",
+                                        selected: "{selected}",
+                                        "{s}"
+                                    }
                                 }
-                            }
-                            set_search_history.modify(|sh| {
-                                let mut v: Vec<_> = sh.iter().filter(|x| x.as_str() != s).cloned().collect();
-                                v.push(s.into());
-                                v
-                            });
-                            set_search_history.needs_update();
-                        },
-                        {search_history.iter().rev().map(|s| {
-                            let selected = WEATHER_CACHE.contains_key(s);
-                            rsx! {
-                                option { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
-                                    key: "search-history-key-{s}",
-                                    value: "{s}",
-                                    selected: "{selected}",
-                                    "{s}"
-                                }
-                            }
-                        })}
-                    }
-                }
-                div { class: "flex flex-wrap w-full px-2",
-                    div { class: "bg-gray-900 text-white relative min-w-0 break-words rounded-lg overflow-hidden shadow-sm mb-4 w-full bg-white dark:bg-gray-600",
-                        div { class: "px-6 py-6 relative",
-                            country_info( weather: weather, forecast: forecast )
-                            country_data( weather: weather, forecast: forecast )
+                            })}
                         }
-                        week_weather( weather: weather, forecast: forecast )
+                    }
+                    div { class: "flex flex-wrap w-full px-2",
+                        div { class: "bg-gray-900 text-white relative min-w-0 break-words rounded-lg overflow-hidden shadow-sm mb-4 w-full bg-white dark:bg-gray-600",
+                            div { class: "px-6 py-6 relative",
+                                country_info_element,
+                                country_data_element,
+                            }
+                            week_weather_element,
+                        }
                     }
                 }
             }
         }
-    ))
+        }
+    )
 }
 
-#[allow(clippy::used_underscore_binding)]
-#[derive(Props)]
-struct WeatherForecastProp<'a> {
-    weather: &'a WeatherData,
-    forecast: &'a WeatherForecast,
-}
-
-fn country_data<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
-    let weather = cx.props.weather;
+fn country_data<'a>(weather: &'a WeatherData) -> LazyNodes<'a, 'a> {
     let temp = weather.main.temp.fahrenheit();
     let feels = weather.main.feels_like.fahrenheit();
     let min = weather.main.temp_min.fahrenheit();
     let max = weather.main.temp_max.fahrenheit();
 
-    cx.render(rsx!(
+    rsx!(
         div { class: "block sm:flex justify-between items-center flex-wrap",
             div { class: "w-full sm:w-1/2",
                 div { class: "flex mb-2 justify-between items-center",
@@ -283,11 +281,10 @@ fn country_data<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
                 }
             }
         }
-    ))
+    )
 }
 
-fn country_info<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
-    let weather = cx.props.weather;
+fn country_info<'a>(weather: &'a WeatherData) -> LazyNodes<'a, 'a> {
     let name = &weather.name;
     let country = weather.sys.country.as_ref().map_or("", StackString::as_str);
     let mut main = StackString::new();
@@ -302,7 +299,7 @@ fn country_info<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
     let fo: UtcOffset = weather.timezone.into();
     let date = weather.dt.to_offset(fo).format(&Rfc3339).unwrap();
 
-    cx.render(rsx!(
+    rsx!(
         div { class: "flex mb-4 justify-between items-center",
             div {
                 h5 { class: "mb-0 font-medium text-xl",
@@ -325,13 +322,12 @@ fn country_info<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
                 }
             }
         }
-    ))
+    )
 }
 
-fn week_weather<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
-    let forecast = cx.props.forecast;
+fn week_weather<'a>(forecast: &'a WeatherForecast) -> LazyNodes<'a, 'a> {
     let high_low = forecast.get_high_low();
-    cx.render(rsx!(
+    rsx!(
         div { class: "divider table mx-2 text-center bg-transparent whitespace-nowrap",
             span { class: "inline-block px-3", small { "Forecast" } }
         }
@@ -381,7 +377,7 @@ fn week_weather<'a>(cx: Scope<'a, WeatherForecastProp<'a>>) -> Element {
                 })
             }
         }
-    ))
+    )
 }
 
 fn get_parameters(search_str: &str) -> WeatherLocation {
