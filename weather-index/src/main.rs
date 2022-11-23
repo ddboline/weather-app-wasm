@@ -87,6 +87,7 @@ fn app(cx: Scope) -> Element {
             if loc != location {
                 set_location(location.clone());
             }
+            location_future.clear();
         }
         rsx! {
             body {
