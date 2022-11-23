@@ -1,13 +1,19 @@
 #![allow(clippy::too_many_lines)]
 
 use dioxus::prelude::{
-    dioxus_elements, format_args_f, rsx, use_state, Element, LazyNodes, NodeFactory, Scope, VNode,
+    dioxus_elements, format_args_f, rsx, use_future, use_state, Element, LazyNodes, NodeFactory,
+    Scope, VNode,
 };
 use fermi::{use_read, use_set, Atom};
+use http::Method;
+use log::{debug, error};
+use serde::{Deserialize, Serialize};
+use std::net::Ipv4Addr;
 use url::Url;
-use wasm_bindgen::JsValue;
-use weather_util_rust::weather_api::WeatherLocation;
-use web_sys::window;
+use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen_futures::JsFuture;
+use weather_util_rust::{latitude::Latitude, longitude::Longitude, weather_api::WeatherLocation};
+use web_sys::{window, Request, RequestInit, Response};
 
 #[cfg(debug_assertions)]
 static BASE_URL: &str = "https://www.ddboline.net";
@@ -58,25 +64,26 @@ fn app(cx: Scope) -> Element {
         }
     }
 
-    // let location_future = use_future(&cx, (), |_| async move {
-    //     if let Ok(ip) = get_ip_address().await {
-    //         debug!("ip {ip}");
-    //         if let Ok(location) = get_location_from_ip(ip).await {
-    //             debug!("location {location:?}");
-    //             return Some(location);
-    //         }
-    //     }
-    //     None
-    // });
+    let location_future = use_future(&cx, (), |_| async move {
+        if let Ok(ip) = get_ip_address().await {
+            debug!("ip {ip}");
+            if let Ok(location) = get_location_from_ip(ip).await {
+                debug!("location {location:?}");
+                return Some(location);
+            }
+        }
+        None
+    });
 
     cx.render({
         let url: Url = format!("{BASE_URL}/{url_path}").parse().expect("Failed to parse base url");
         let url = Url::parse_with_params(url.as_str(), location.get_options()).unwrap_or(url);
-        // if let Some(Some(loc)) = location_future.value() {
-        //     if loc != location {
-        //         set_location(location.clone());
-        //     }
-        // }
+        if let Some(Some(loc)) = location_future.value() {
+            debug!("location {loc:?}");
+            if loc != location {
+                set_location(location.clone());
+            }
+        }
         rsx! {
             body {
                 div {
@@ -84,9 +91,9 @@ fn app(cx: Scope) -> Element {
                         "type": "button",
                         name: "update_location",
                         value: "Update Location",
-                        // onclick: move |_| {
-                        //     location_future.restart();
-                        // },
+                        onclick: move |_| {
+                            location_future.restart();
+                        },
                     },
                     input {
                         "type": "button",
@@ -228,74 +235,75 @@ fn get_history() -> Result<Vec<String>, JsValue> {
     }
 }
 
-// async fn js_fetch(url: &Url, method: Method) -> Result<JsValue, JsValue> {
-//     let mut opts = RequestInit::new();
-//     opts.method(method.as_str());
+async fn js_fetch(url: &Url, method: Method) -> Result<JsValue, JsValue> {
+    let mut opts = RequestInit::new();
+    opts.method(method.as_str());
 
-//     let request = Request::new_with_str_and_init(url.as_str(), &opts)?;
-//     let window = web_sys::window().unwrap();
-//     let resp = JsFuture::from(window.fetch_with_request(&request)).await?;
-//     let resp: Response = resp.dyn_into().unwrap();
-//     JsFuture::from(resp.json()?).await
-// }
+    let request = Request::new_with_str_and_init(url.as_str(), &opts)?;
+    let window = web_sys::window().unwrap();
+    let resp = JsFuture::from(window.fetch_with_request(&request)).await?;
+    let resp: Response = resp.dyn_into().unwrap();
+    JsFuture::from(resp.json()?).await
+}
 
-// async fn text_fetch(url: &Url, method: Method) -> Result<JsValue, JsValue> {
-//     let mut opts = RequestInit::new();
-//     opts.method(method.as_str());
+async fn text_fetch(url: &Url, method: Method) -> Result<JsValue, JsValue> {
+    let mut opts = RequestInit::new();
+    opts.method(method.as_str());
 
-//     let request = Request::new_with_str_and_init(url.as_str(), &opts)?;
-//     let window = web_sys::window().unwrap();
-//     let resp = JsFuture::from(window.fetch_with_request(&request)).await?;
-//     let resp: Response = resp.dyn_into().unwrap();
-//     JsFuture::from(resp.text()?).await
-// }
+    let request = Request::new_with_str_and_init(url.as_str(), &opts)?;
+    let window = web_sys::window().unwrap();
+    let resp = JsFuture::from(window.fetch_with_request(&request)).await?;
+    let resp: Response = resp.dyn_into().unwrap();
+    JsFuture::from(resp.text()?).await
+}
 
-// async fn get_ip_address() -> Result<Ipv4Addr, JsValue> {
-//     let url: Url = "https://ipinfo.io/ip".parse().map_err(|e| {
-//         error!("error {e}");
-//         let e: JsValue = format!("{e}").into();
-//         e
-//     })?;
-//     let resp = text_fetch(&url, Method::GET).await?;
-//     let resp = resp
-//         .as_string()
-//         .ok_or_else(|| JsValue::from_str("Failed to get ip"))?
-//         .trim()
-//         .to_string();
-//     debug!("got resp {resp}");
-//     resp.parse().map_err(|e| {
-//         let e: JsValue = format!("{e}").into();
-//         e
-//     })
-// }
+async fn get_ip_address() -> Result<Ipv4Addr, JsValue> {
+    let url: Url = "https://ipinfo.io/ip".parse().map_err(|e| {
+        error!("error {e}");
+        let e: JsValue = format!("{e}").into();
+        e
+    })?;
+    let resp = text_fetch(&url, Method::GET).await?;
+    let resp = resp
+        .as_string()
+        .ok_or_else(|| JsValue::from_str("Failed to get ip"))?
+        .trim()
+        .to_string();
+    debug!("got resp {resp}");
+    resp.parse().map_err(|e| {
+        let e: JsValue = format!("{e}").into();
+        e
+    })
+}
 
-// async fn get_location_from_ip(ip: Ipv4Addr) -> Result<WeatherLocation,
-// JsValue> {     #[derive(Default, Serialize, Deserialize)]
-//     struct Location {
-//         latitude: Latitude,
-//         longitude: Longitude,
-//     }
+async fn get_location_from_ip(ip: Ipv4Addr) -> Result<WeatherLocation, JsValue> {
+    #[derive(Default, Serialize, Deserialize)]
+    struct Location {
+        latitude: Latitude,
+        longitude: Longitude,
+    }
 
-//     let ipaddr = ip.to_string();
-//     let url = Url::parse("https://ipwhois.app/json/")
-//         .map_err(|e| {
-//             error!("error {e}");
-//             let e: JsValue = format!("{e}").into();
-//             e
-//         })?
-//         .join(&ipaddr)
-//         .map_err(|e| {
-//             error!("error {e}");
-//             let e: JsValue = format!("{e}").into();
-//             e
-//         })?;
-//     let json = js_fetch(&url, Method::GET).await?;
-//     let location: Location = serde_wasm_bindgen::from_value(json)?;
-//     Ok(WeatherLocation::from_lat_lon(
-//         location.latitude,
-//         location.longitude,
-//     ))
-// }
+    let ipaddr = ip.to_string();
+    let url = Url::parse("https://ipwhois.app/json/")
+        .map_err(|e| {
+            error!("error {e}");
+            let e: JsValue = format!("{e}").into();
+            e
+        })?
+        .join(&ipaddr)
+        .map_err(|e| {
+            error!("error {e}");
+            let e: JsValue = format!("{e}").into();
+            e
+        })?;
+    debug!("url {url}");
+    let json = js_fetch(&url, Method::GET).await?;
+    let location: Location = serde_wasm_bindgen::from_value(json)?;
+    Ok(WeatherLocation::from_lat_lon(
+        location.latitude,
+        location.longitude,
+    ))
+}
 
 fn get_parameters(search_str: &str) -> WeatherLocation {
     let mut opts = WeatherLocation::from_city_name(search_str);
