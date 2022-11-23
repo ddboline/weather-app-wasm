@@ -42,6 +42,7 @@ fn app(cx: Scope) -> Element {
         get_history().unwrap_or_else(|_| vec![String::from("zip=10001")])
     })
     .split();
+    let (ip_location, set_ip_location) = use_state(&cx, || get_parameters(DEFAULT_LOCATION)).split();
 
     let location = use_read(&cx, LOCATION);
     let set_location = use_set(&cx, LOCATION);
@@ -83,9 +84,9 @@ fn app(cx: Scope) -> Element {
         let url: Url = format!("{base_url}/{url_path}").parse().expect("Failed to parse base url");
         let url = Url::parse_with_params(url.as_str(), location.get_options()).unwrap_or(url);
         if let Some(Some(loc)) = location_future.value() {
-            if loc != location {
+            if loc != ip_location {
                 debug!("set location {loc:?}");
-                set_location(location.clone());
+                set_ip_location.set(loc.clone());
             }
             location_future.clear();
         }
@@ -97,7 +98,10 @@ fn app(cx: Scope) -> Element {
                         name: "update_location",
                         value: "Update Location",
                         onclick: move |_| {
-                            location_future.restart();
+                            if location != ip_location {
+                                set_location(ip_location.clone());
+                                location_future.restart();
+                            }
                         },
                     },
                     input {
