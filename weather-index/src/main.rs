@@ -71,7 +71,7 @@ fn app(cx: Scope) -> Element {
         if let Ok(ip) = get_ip_address().await {
             debug!("ip {ip}");
             if let Ok(location) = get_location_from_ip(ip).await {
-                debug!("location {location:?}");
+                debug!("get location {location:?}");
                 return Some(location);
             }
         }
@@ -83,8 +83,8 @@ fn app(cx: Scope) -> Element {
         let url: Url = format!("{base_url}/{url_path}").parse().expect("Failed to parse base url");
         let url = Url::parse_with_params(url.as_str(), location.get_options()).unwrap_or(url);
         if let Some(Some(loc)) = location_future.value() {
-            debug!("location {loc:?}");
             if loc != location {
+                debug!("set location {loc:?}");
                 set_location(location.clone());
             }
             location_future.clear();
