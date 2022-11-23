@@ -15,11 +15,13 @@ use wasm_bindgen_futures::JsFuture;
 use weather_util_rust::{latitude::Latitude, longitude::Longitude, weather_api::WeatherLocation};
 use web_sys::{window, Request, RequestInit, Response};
 
+static DEFAULT_URL: &str = "https://www.ddboline.net";
+
 #[cfg(debug_assertions)]
-static BASE_URL: &str = "https://www.ddboline.net";
+static BASE_URL: Option<&str> = Some(DEFAULT_URL);
 
 #[cfg(not(debug_assertions))]
-static BASE_URL: &str = "";
+static BASE_URL: Option<&str> = None;
 
 static DEFAULT_LOCATION: &str = "10001";
 static LOCATION: Atom<WeatherLocation> = |_| get_parameters(DEFAULT_LOCATION);
@@ -45,6 +47,7 @@ fn app(cx: Scope) -> Element {
     let set_location = use_set(&cx, LOCATION);
 
     let window = window().unwrap();
+    let origin = window.location().origin().unwrap_or_else(|_| DEFAULT_URL.to_string());
     let search = window.location().search().unwrap();
 
     if !search.is_empty() && current_loc.is_none() {
@@ -76,7 +79,8 @@ fn app(cx: Scope) -> Element {
     });
 
     cx.render({
-        let url: Url = format!("{BASE_URL}/{url_path}").parse().expect("Failed to parse base url");
+        let base_url = BASE_URL.unwrap_or(&origin);
+        let url: Url = format!("{base_url}/{url_path}").parse().expect("Failed to parse base url");
         let url = Url::parse_with_params(url.as_str(), location.get_options()).unwrap_or(url);
         if let Some(Some(loc)) = location_future.value() {
             debug!("location {loc:?}");
